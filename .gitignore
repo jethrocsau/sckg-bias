@@ -1,0 +1,28 @@
+.env
+.venv/
+biomed_env/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Data and generated artifacts
+data/
+kg/
+archive/
+results/
+logs/
+figs/
+test_run_results/
+scGPT_human/
+models/variant_runs/
+
+# Large local-only files at repo root
+*.npz
+*.pt
+*.bin
+*.csv
+
+# External references / notebooks / local docs
+reference/
+*.ipynb
+spec_proposal.tex
