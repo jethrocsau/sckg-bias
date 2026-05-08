@@ -161,10 +161,8 @@ class DGLRelationGATPool(nn.Module):
 class _KGPoolMixin:
     def _init_kg_pool(self, cfg):
         self.kg_embed_method = getattr(cfg, "kg_embed_method", "mean_decay")
-        if self.kg_embed_method == "gat":
+        if self.kg_embed_method in {"gat", "dgl_gat"}:
             self.kg_pool = RelationGATPool(cfg.d_kg, cfg.d_model)
-        elif self.kg_embed_method == "dgl_gat":
-            self.kg_pool = DGLRelationGATPool(cfg.d_kg, cfg.d_model)
         else:
             self.kg_pool = MeanDecayRelationPool()
 

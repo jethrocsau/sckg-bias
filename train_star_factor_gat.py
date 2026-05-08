@@ -68,7 +68,7 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default="mean_decay",
         choices=["mean_decay", "gat", "dgl_gat"],
-        help="How KG relation embeddings are pooled for KG-aware baselines: uniform mean, internal relation-GAT, or external DGL GATConv.",
+        help="How KG relation embeddings are pooled for KG-aware baselines: uniform mean or relation-GAT. `dgl_gat` is kept as a backward-compatible alias for `gat`.",
     )
     parser.add_argument("--primekg-dir", type=Path, default=Path("data/primekgpp_grace_redaf"))
     parser.add_argument("--star-meta-path", type=Path, default=Path("data/star_graphs_meta.json"))
