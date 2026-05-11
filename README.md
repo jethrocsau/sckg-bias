@@ -1,4 +1,4 @@
-# scGNN-Factors
+# scKG-Bias
 
 Closed-set star-graph edge-class prediction for single-cell perturbation data, with optional PrimeKG++ context and interpretability exports.
 
