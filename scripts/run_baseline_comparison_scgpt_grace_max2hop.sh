@@ -27,20 +27,26 @@ set -euo pipefail
 
 PYTHON_BIN="${1:-python}"
 SPLIT_MODE="${2:-graph}"
-EPOCHS="${3:-30}"
+EPOCHS="${3:-100}"
 BATCH_SIZE="${4:-16}"
 DEVICE="${5:-cuda}"
 OUT_ROOT="${6:-results/baseline_comparison}"
 EMBEDDING_SIZE="${7:-64}"
 GAT_DEPTH="${8:-1}"
 KG_HOPS="${9:-1,2}"
-KG_RELATION_LIMIT="${10:-1,2,3,4}"
+KG_RELATION_LIMIT="${10:-1,2,4,6,8, all}"
 KG_SOURCE_KEYS_CSV="${11:-grace}"
-KG_METHODS_CSV="${12:-mean_decay,path_attn}"
+KG_METHODS_CSV="${12:-path_attn, mean_decay}"
 LOCAL_EMBED_INPUT="${13:-data/scgpt_embeds/tahoe_embeddings_parquet*.npz}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
+
+if [[ "$OUT_ROOT" = /* ]]; then
+  OUT_ROOT_ABS="$OUT_ROOT"
+else
+  OUT_ROOT_ABS="$ROOT_DIR/$OUT_ROOT"
+fi
 
 normalize_embedding_key() {
   local key
@@ -74,18 +80,46 @@ echo "[1/3] Rebuilding local graph artifacts with split mode: ${SPLIT_MODE}"
 echo "[2/3] Auditing current splits"
 "$PYTHON_BIN" test.py
 
-mkdir -p "$OUT_ROOT"
+mkdir -p "$OUT_ROOT_ABS"
 
 SUMMARY_ROWS=()
 WEIGHT_SUMMARIES=()
 PATH_WEIGHT_SUMMARIES=()
 PREDICTION_SUMMARIES=()
 PREDICTION_COMPARISONS=()
-VARIANTS=(target_only context_only kg_context target_plus_context context_plus_kg target_plus_kg target_plus_context_kg)
+NON_KG_VARIANTS=(target_only context_only target_plus_context)
+KG_VARIANTS=(kg_context context_plus_kg target_plus_kg target_plus_context_kg)
 IFS=',' read -r -a RAW_KG_SOURCE_KEYS <<< "$KG_SOURCE_KEYS_CSV"
 IFS=',' read -r -a KG_HOPS_LIST <<< "$KG_HOPS"
 IFS=',' read -r -a KG_RELATION_LIMIT_LIST <<< "$KG_RELATION_LIMIT"
 IFS=',' read -r -a RAW_KG_METHODS <<< "$KG_METHODS_CSV"
+
+collect_run_outputs() {
+  local run_dir="$1"
+  SUMMARY_ROWS+=("$run_dir/experiment_summary.csv")
+  if [[ -f "$run_dir/single_run.kg_relation_weight_summary.csv" ]]; then
+    WEIGHT_SUMMARIES+=("$run_dir/single_run.kg_relation_weight_summary.csv")
+  fi
+  if [[ -f "$run_dir/single_run.kg_path_weight_summary.csv" ]]; then
+    PATH_WEIGHT_SUMMARIES+=("$run_dir/single_run.kg_path_weight_summary.csv")
+  fi
+  if [[ -f "$run_dir/single_run.prediction_summary.csv" ]]; then
+    PREDICTION_SUMMARIES+=("$run_dir/single_run.prediction_summary.csv")
+  fi
+  if [[ -f "$run_dir/single_run.prediction_comparison.csv" ]]; then
+    PREDICTION_COMPARISONS+=("$run_dir/single_run.prediction_comparison.csv")
+  fi
+}
+
+link_shared_run_for_source() {
+  local shared_run_dir="$1"
+  local kg_source_key="$2"
+  local linked_run_dir="$OUT_ROOT_ABS/${kg_source_key}/$(basename "$shared_run_dir")"
+  mkdir -p "$(dirname "$linked_run_dir")"
+  rm -rf "$linked_run_dir"
+  ln -sfnT "$shared_run_dir" "$linked_run_dir"
+  collect_run_outputs "$linked_run_dir"
+}
 
 KG_SOURCE_KEYS=()
 for raw_key in "${RAW_KG_SOURCE_KEYS[@]}"; do
@@ -124,47 +158,54 @@ if [[ ${#KG_SOURCE_KEYS[@]} -eq 0 ]]; then
 fi
 
 if [[ "${INCLUDE_FULL_MODEL:-0}" == "1" ]]; then
-  VARIANTS+=(full)
+  KG_VARIANTS+=(full)
 fi
+
+for variant in "${NON_KG_VARIANTS[@]}"; do
+  SHARED_RUN_DIR="$OUT_ROOT_ABS/_shared/${variant}_na_hopna_relall"
+  echo "[3/3] Running shared stage1 baseline variant=${variant}"
+  "$PYTHON_BIN" train_star_factor_gat.py \
+    --run-training \
+    --stage 1 \
+    --model-variant "$variant" \
+    --epochs "$EPOCHS" \
+    --batch-size "$BATCH_SIZE" \
+    --device "$DEVICE" \
+    --embedding-size "$EMBEDDING_SIZE" \
+    --gat-depth "$GAT_DEPTH" \
+    --num-factors 1 \
+    --learning-rate 1e-4 \
+    --weight-decay 1e-3 \
+    --dropout 0.3 \
+    --label-smoothing 0.05 \
+    --warmup-epochs 3 \
+    --analysis-output-dir "$SHARED_RUN_DIR" \
+    --primekg-dir "$(resolve_primekg_dir "${KG_SOURCE_KEYS[0]}")"
+  for kg_source_key in "${KG_SOURCE_KEYS[@]}"; do
+    link_shared_run_for_source "$SHARED_RUN_DIR" "$kg_source_key"
+  done
+done
 
 for kg_source_key in "${KG_SOURCE_KEYS[@]}"; do
   PRIMEKG_DIR="$(resolve_primekg_dir "$kg_source_key")"
-  for variant in "${VARIANTS[@]}"; do
-    KG_METHODS=("na")
-    KG_HOP_VALUES=("na")
-    KG_REL_LIMIT_VALUES=("na")
-    if [[ "$variant" == "kg_context" || "$variant" == "context_plus_kg" || "$variant" == "target_plus_kg" || "$variant" == "target_plus_context_kg" || "$variant" == "full" ]]; then
-      KG_METHODS=("${CONFIGURED_KG_METHODS[@]}")
-      KG_HOP_VALUES=("${KG_HOPS_LIST[@]}")
-      KG_REL_LIMIT_VALUES=("${KG_RELATION_LIMIT_LIST[@]}")
-    fi
-
-    for kg_method in "${KG_METHODS[@]}"; do
-      REL_LIMIT_VALUES=("${KG_REL_LIMIT_VALUES[@]}")
-      if [[ "$kg_method" == "path_attn" ]]; then
-        REL_LIMIT_VALUES=("all")
-      fi
-      for kg_hops in "${KG_HOP_VALUES[@]}"; do
+  for variant in "${KG_VARIANTS[@]}"; do
+    for kg_method in "${CONFIGURED_KG_METHODS[@]}"; do
+      for kg_hops in "${KG_HOPS_LIST[@]}"; do
         kg_hops="$(echo "$kg_hops" | xargs)"
         [[ -z "$kg_hops" ]] && kg_hops="na"
-        for kg_relation_limit in "${REL_LIMIT_VALUES[@]}"; do
+        for kg_relation_limit in "${KG_RELATION_LIMIT_LIST[@]}"; do
           kg_relation_limit="$(echo "$kg_relation_limit" | xargs)"
           [[ -z "$kg_relation_limit" ]] && kg_relation_limit="all"
 
-          RUN_DIR="$OUT_ROOT/${kg_source_key}/${variant}_${kg_method}_hop${kg_hops}_rel${kg_relation_limit}"
+          RUN_DIR="$OUT_ROOT_ABS/${kg_source_key}/${variant}_${kg_method}_hop${kg_hops}_rel${kg_relation_limit}"
           echo "[3/3] Running kg_source=${kg_source_key} variant=${variant} kg=${kg_method} hops=${kg_hops} rel_limit=${kg_relation_limit}"
-          STAGE=1
-          EXTRA_ARGS=(--primekg-dir "$PRIMEKG_DIR")
-          if [[ "$variant" == "kg_context" || "$variant" == "context_plus_kg" || "$variant" == "target_plus_kg" || "$variant" == "target_plus_context_kg" || "$variant" == "full" ]]; then
-            STAGE=2
-            EXTRA_ARGS+=(--precompute-kg-multihop --kg-hops "$kg_hops" --kg-embed-method "$kg_method")
-            if [[ "$kg_method" != "path_attn" && "$kg_relation_limit" != "all" ]]; then
-              EXTRA_ARGS+=(--kg-relation-limit "$kg_relation_limit")
-            fi
+          EXTRA_ARGS=(--primekg-dir "$PRIMEKG_DIR" --precompute-kg-multihop --kg-hops "$kg_hops" --kg-embed-method "$kg_method")
+          if [[ "$kg_relation_limit" != "all" ]]; then
+            EXTRA_ARGS+=(--kg-relation-limit "$kg_relation_limit")
           fi
           "$PYTHON_BIN" train_star_factor_gat.py \
             --run-training \
-            --stage "$STAGE" \
+            --stage 2 \
             --model-variant "$variant" \
             --epochs "$EPOCHS" \
             --batch-size "$BATCH_SIZE" \
@@ -172,33 +213,21 @@ for kg_source_key in "${KG_SOURCE_KEYS[@]}"; do
             --embedding-size "$EMBEDDING_SIZE" \
             --gat-depth "$GAT_DEPTH" \
             --num-factors 1 \
-            --learning-rate 5e-5 \
+            --learning-rate 1e-4 \
             --weight-decay 1e-3 \
             --dropout 0.3 \
             --label-smoothing 0.05 \
             --warmup-epochs 3 \
             --analysis-output-dir "$RUN_DIR" \
             "${EXTRA_ARGS[@]}"
-          SUMMARY_ROWS+=("$RUN_DIR/experiment_summary.csv")
-          if [[ -f "$RUN_DIR/single_run.kg_relation_weight_summary.csv" ]]; then
-            WEIGHT_SUMMARIES+=("$RUN_DIR/single_run.kg_relation_weight_summary.csv")
-          fi
-          if [[ -f "$RUN_DIR/single_run.kg_path_weight_summary.csv" ]]; then
-            PATH_WEIGHT_SUMMARIES+=("$RUN_DIR/single_run.kg_path_weight_summary.csv")
-          fi
-          if [[ -f "$RUN_DIR/single_run.prediction_summary.csv" ]]; then
-            PREDICTION_SUMMARIES+=("$RUN_DIR/single_run.prediction_summary.csv")
-          fi
-          if [[ -f "$RUN_DIR/single_run.prediction_comparison.csv" ]]; then
-            PREDICTION_COMPARISONS+=("$RUN_DIR/single_run.prediction_comparison.csv")
-          fi
+          collect_run_outputs "$RUN_DIR"
         done
       done
     done
   done
 done
 
-comparison_out="$OUT_ROOT/comparison_summary.csv"
+comparison_out="$OUT_ROOT_ABS/comparison_summary.csv"
 comparison_header_written=0
 for summary in "${SUMMARY_ROWS[@]}"; do
   if [[ -f "$summary" ]]; then
@@ -213,45 +242,45 @@ for summary in "${SUMMARY_ROWS[@]}"; do
   fi
 done
 
-echo "kg_source,variant,relation_idx,relation_id,relation_name,weight_mean,weight_std,weight_min,weight_max" > "$OUT_ROOT/kg_weight_bias_summary.csv"
+echo "kg_source,variant,relation_idx,relation_id,relation_name,weight_mean,weight_std,weight_min,weight_max" > "$OUT_ROOT_ABS/kg_weight_bias_summary.csv"
 for summary in "${WEIGHT_SUMMARIES[@]}"; do
   if [[ -f "$summary" ]]; then
     variant="$(basename "$(dirname "$summary")")"
     kg_source="$(basename "$(dirname "$(dirname "$summary")")")"
-    awk -F, -v kg_source="$kg_source" -v variant="$variant" 'NR==1{next} {print kg_source","variant","$0}' "$summary" >> "$OUT_ROOT/kg_weight_bias_summary.csv"
+    awk -F, -v kg_source="$kg_source" -v variant="$variant" 'NR==1{next} {print kg_source","variant","$0}' "$summary" >> "$OUT_ROOT_ABS/kg_weight_bias_summary.csv"
   fi
 done
 
-echo "kg_source,variant,path_idx,path_hops,relation_seq,weight_mean,weight_std,weight_min,weight_max" > "$OUT_ROOT/kg_path_bias_summary.csv"
+echo "kg_source,variant,path_idx,path_hops,relation_seq,weight_mean,weight_std,weight_min,weight_max" > "$OUT_ROOT_ABS/kg_path_bias_summary.csv"
 for summary in "${PATH_WEIGHT_SUMMARIES[@]}"; do
   if [[ -f "$summary" ]]; then
     variant="$(basename "$(dirname "$summary")")"
     kg_source="$(basename "$(dirname "$(dirname "$summary")")")"
-    awk -F, -v kg_source="$kg_source" -v variant="$variant" 'NR==1{next} {print kg_source","variant","$0}' "$summary" >> "$OUT_ROOT/kg_path_bias_summary.csv"
+    awk -F, -v kg_source="$kg_source" -v variant="$variant" 'NR==1{next} {print kg_source","variant","$0}' "$summary" >> "$OUT_ROOT_ABS/kg_path_bias_summary.csv"
   fi
 done
 
-echo "kg_source,variant,split,num_samples,acc,confidence_mean,confidence_correct_mean,confidence_incorrect_mean,num_unique_true,num_unique_pred" > "$OUT_ROOT/prediction_summary.csv"
+echo "kg_source,variant,split,num_samples,acc,confidence_mean,confidence_correct_mean,confidence_incorrect_mean,num_unique_true,num_unique_pred" > "$OUT_ROOT_ABS/prediction_summary.csv"
 for summary in "${PREDICTION_SUMMARIES[@]}"; do
   if [[ -f "$summary" ]]; then
     variant="$(basename "$(dirname "$summary")")"
     kg_source="$(basename "$(dirname "$(dirname "$summary")")")"
-    awk -F, -v kg_source="$kg_source" -v variant="$variant" 'NR==1{next} {print kg_source","variant","$0}' "$summary" >> "$OUT_ROOT/prediction_summary.csv"
+    awk -F, -v kg_source="$kg_source" -v variant="$variant" 'NR==1{next} {print kg_source","variant","$0}' "$summary" >> "$OUT_ROOT_ABS/prediction_summary.csv"
   fi
 done
 
-echo "kg_source,variant,split,true_edge_class_idx,true_edge_name,pred_edge_class_idx,pred_edge_name,count,confidence_mean,confidence_std,correct_rate" > "$OUT_ROOT/prediction_comparison.csv"
+echo "kg_source,variant,split,true_edge_class_idx,true_edge_name,pred_edge_class_idx,pred_edge_name,count,confidence_mean,confidence_std,correct_rate" > "$OUT_ROOT_ABS/prediction_comparison.csv"
 for summary in "${PREDICTION_COMPARISONS[@]}"; do
   if [[ -f "$summary" ]]; then
     variant="$(basename "$(dirname "$summary")")"
     kg_source="$(basename "$(dirname "$(dirname "$summary")")")"
-    awk -F, -v kg_source="$kg_source" -v variant="$variant" 'NR==1{next} {print kg_source","variant","$0}' "$summary" >> "$OUT_ROOT/prediction_comparison.csv"
+    awk -F, -v kg_source="$kg_source" -v variant="$variant" 'NR==1{next} {print kg_source","variant","$0}' "$summary" >> "$OUT_ROOT_ABS/prediction_comparison.csv"
   fi
 done
 
-echo "Baseline comparison complete: ${OUT_ROOT}"
-echo "Summary CSV: ${OUT_ROOT}/comparison_summary.csv"
-echo "KG bias summary CSV: ${OUT_ROOT}/kg_weight_bias_summary.csv"
-echo "KG path summary CSV: ${OUT_ROOT}/kg_path_bias_summary.csv"
-echo "Prediction summary CSV: ${OUT_ROOT}/prediction_summary.csv"
-echo "Prediction comparison CSV: ${OUT_ROOT}/prediction_comparison.csv"
+echo "Baseline comparison complete: ${OUT_ROOT_ABS}"
+echo "Summary CSV: ${OUT_ROOT_ABS}/comparison_summary.csv"
+echo "KG bias summary CSV: ${OUT_ROOT_ABS}/kg_weight_bias_summary.csv"
+echo "KG path summary CSV: ${OUT_ROOT_ABS}/kg_path_bias_summary.csv"
+echo "Prediction summary CSV: ${OUT_ROOT_ABS}/prediction_summary.csv"
+echo "Prediction comparison CSV: ${OUT_ROOT_ABS}/prediction_comparison.csv"

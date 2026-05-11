@@ -100,26 +100,3 @@ def train_step(
 
     optimizer.step()
     return metrics
-
-
-@torch.no_grad()
-def eval_step(model: nn.Module, batch: dict[str, Tensor]) -> dict[str, float]:
-    """Single evaluation step with leakage assertion."""
-    model.eval()
-    
-    h_kg_multi = batch.get("h_kg_multi")
-
-    logits, aux_data = model(
-        h0=batch["h0"],
-        h_known=batch["h_known"],
-        y_known=batch["y_known"],
-        h_target=batch["h_target"],
-        known_mask=batch.get("known_mask"),
-        h_kg_multi=h_kg_multi,
-    )
-
-    assert_no_leakage(logits)
-    pred = torch.argmax(logits, dim=-1)
-    acc = torch.mean((pred == batch["y"]).float())
-    
-    return {"eval/acc": float(acc.detach().cpu())}

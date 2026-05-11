@@ -16,11 +16,6 @@ import torch.nn.functional as F
 from tqdm.auto import tqdm
 from torchinfo import summary
 
-try:
-    import wandb
-except ImportError:
-    wandb = None
-
 from pipeline.models.baselines import ContextOnlyBaseline
 from pipeline.models.baselines import ContextPlusKGBaseline
 from pipeline.models.baselines import KGContextBaseline
@@ -30,7 +25,6 @@ from pipeline.models.baselines import TargetPlusKGBaseline
 from pipeline.models.baselines import TargetOnlyBaseline
 from pipeline.models.star_factor import StarFactorModel
 from pipeline.primekg_bridge import PrimeKGBridgeConfig
-from pipeline.primekg_bridge import build_h_kg_class_tensor
 from pipeline.primekg_bridge import load_drug_class_order
 from pipeline.primekg_bridge import load_entity_id_to_name
 from pipeline.primekg_bridge import load_multirel_relation_context
@@ -62,7 +56,7 @@ class StarFactorConfig:
     model_variant: str = "full"
     kg_embed_method: str = "mean_decay"
     kg_subtree_pool_method: str = "match"
-    kg_relation_pool_method: str = "gat"
+    kg_relation_pool_method: str = "match"
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train MoE StarFactor pipeline.")
@@ -87,9 +81,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--kg-relation-pool-method",
         type=str,
-        default="gat",
-        choices=["mean_decay", "gat"],
-        help="How the per-relation rows are pooled after subtree summarization.",
+        default="match",
+        choices=["match", "mean_decay", "gat"],
+        help="How the per-relation rows are pooled after subtree summarization. `match` uses deterministic mean pooling for `mean_decay` and attention pooling for `gat`/`dgl_gat`.",
     )
     parser.add_argument("--kg-path-max-paths", type=int, default=32)
     parser.add_argument("--primekg-dir", type=Path, default=Path("data/primekgpp_grace_redaf"))
@@ -642,6 +636,7 @@ def _run_single_training(run_name, stage, args, device, relation_limit, out_dir)
                     bridge_cfg,
                     class_names,
                     hops=args.kg_hops,
+                    relation_limit=relation_limit,
                     max_paths=args.kg_path_max_paths,
                 ),
                 device,

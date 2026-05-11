@@ -170,80 +170,6 @@ def seed_node_ids(node_df: pd.DataFrame, seed_drugs: list[str]):
     return ids, missing
 
 
-def get_khop_nodes(g: nx.Graph, seed_ids: list[int], hops: int):
-    keep = set(seed_ids)
-    for seed_id in seed_ids:
-        if seed_id not in g:
-            continue
-        distances = nx.single_source_shortest_path_length(g, seed_id, cutoff=hops)
-        keep.update(distances.keys())
-    return keep
-
-
-def get_min_hop_map(g: nx.Graph, seed_ids: list[int], hops: int):
-    hop_map = {}
-    for seed_id in seed_ids:
-        if seed_id not in g:
-            continue
-        distances = nx.single_source_shortest_path_length(g, seed_id, cutoff=hops)
-        for nid, d in distances.items():
-            hop_map[nid] = min(hop_map.get(nid, d), d)
-    return hop_map
-
-
-def pca_2d(x: np.ndarray):
-    x = np.asarray(x, dtype=np.float32)
-    centered = x - x.mean(axis=0, keepdims=True)
-    u, s, _ = np.linalg.svd(centered, full_matrices=False)
-    return (u[:, :2] * s[:2]).astype(np.float32)
-
-
-def sample_subgraph_edges_by_relation(sg: nx.Graph, max_edges_per_relation: int, seed: int):
-    rng = np.random.default_rng(seed)
-
-    rel_to_edges = {}
-    for src, dst, attrs in sg.edges(data=True):
-        rel_key = attrs.get("relation_label", "unknown")
-        rel_to_edges.setdefault(rel_key, []).append((src, dst))
-
-    keep_edges = set()
-    for rel_key, rel_edges in rel_to_edges.items():
-        if len(rel_edges) <= max_edges_per_relation:
-            picked = rel_edges
-        else:
-            picked_idx = rng.choice(len(rel_edges), size=max_edges_per_relation, replace=False)
-            picked = [rel_edges[int(i)] for i in picked_idx]
-        for edge in picked:
-            keep_edges.add(tuple(sorted(edge)))
-
-    sampled = nx.Graph()
-    for src, dst in sg.edges():
-        key = tuple(sorted((src, dst)))
-        if key not in keep_edges:
-            continue
-        sampled.add_node(src, **sg.nodes[src])
-        sampled.add_node(dst, **sg.nodes[dst])
-        sampled.add_edge(src, dst, **sg[src][dst])
-
-    sampled.remove_nodes_from(list(nx.isolates(sampled)))
-    return sampled
-
-
-def build_positions(sg: nx.Graph, node_embeddings: np.ndarray, layout_k: float, seed: int, use_pca: bool):
-    ordered_nodes = list(sg.nodes())
-    if not ordered_nodes:
-        return {}
-
-    if not use_pca:
-        return nx.spring_layout(sg, seed=seed, k=layout_k)
-
-    emb = np.vstack([node_embeddings[int(nid)] for nid in ordered_nodes]).astype(np.float32)
-    pca_xy = pca_2d(emb)
-    if np.allclose(pca_xy.std(axis=0), 0.0):
-        return nx.spring_layout(sg, seed=seed, k=layout_k)
-    return {nid: pca_xy[i] for i, nid in enumerate(ordered_nodes)}
-
-
 def draw_graph_on_axis(
     ax,
     sg: nx.Graph,
@@ -276,26 +202,6 @@ def draw_graph_on_axis(
 
     ax.set_title(title)
     ax.axis("off")
-
-
-def trim_nodes_by_distance(g: nx.Graph, nodes: set[int], seed_ids: list[int], max_nodes: int):
-    if len(nodes) <= max_nodes:
-        return nodes
-
-    if not seed_ids:
-        return set(list(nodes)[:max_nodes])
-
-    dist_map = {}
-    for seed_id in seed_ids:
-        if seed_id not in g:
-            continue
-        d = nx.single_source_shortest_path_length(g, seed_id)
-        for nid in nodes:
-            if nid in d:
-                dist_map[nid] = min(dist_map.get(nid, d[nid]), d[nid])
-
-    scored = sorted(nodes, key=lambda n: (dist_map.get(n, 10**9), n))
-    return set(scored[:max_nodes])
 
 
 def expand_spiderweb_subgraph(

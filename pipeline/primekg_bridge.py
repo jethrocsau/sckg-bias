@@ -87,11 +87,14 @@ def _resolve_path_cache_path(
     cfg: PrimeKGBridgeConfig,
     hops: int,
     max_paths: int,
+    relation_limit: int | None,
 ) -> Path:
     cache_path = cfg.hkg_path_cache_path
     suffix = cache_path.suffix or ".npz"
     stem = cache_path.stem
     tag = f"{stem}.h{hops}.top{max_paths}"
+    if relation_limit is not None:
+        tag = f"{tag}.rootreltop{relation_limit}"
     return cache_path.with_name(f"{tag}{suffix}")
 
 
@@ -267,33 +270,6 @@ def _load_adjacency(
     return adj
 
 
-def _k_hop_relation_nodes(
-    adj: list[dict[int, set[int]]],
-    root: int,
-    hops: int,
-) -> dict[int, list[tuple[int, int]]]:
-    """Traverses neighborhood and tracks the hop distance for each neighbor."""
-    visited = {root: 0}
-    frontier = {root}
-    # relation_id -> list of (neighbor_id, hop_distance)
-    relation_nodes: dict[int, list[tuple[int, int]]] = defaultdict(list)
-
-    for h in range(1, hops + 1):
-        nxt = set()
-        for node in frontier:
-            for relation_id, neighbors in adj[node].items():
-                for neighbor in neighbors:
-                    if neighbor not in visited:
-                        visited[neighbor] = h
-                        relation_nodes[int(relation_id)].append((int(neighbor), h))
-                        nxt.add(int(neighbor))
-        if not nxt:
-            break
-        frontier = nxt
-
-    return relation_nodes
-
-
 def _dfs_root_relation_nodes(
     adj: list[dict[int, set[int]]],
     root: int,
@@ -342,6 +318,7 @@ def _k_hop_paths(
     root: int,
     hops: int,
     max_paths: int,
+    retained_root_relations: set[int] | None = None,
 ) -> list[tuple[list[int], list[int]]]:
     """Collect simple shortest-first paths up to `hops`."""
     if hops <= 0 or max_paths <= 0:
@@ -357,7 +334,9 @@ def _k_hop_paths(
 
         if depth > 0:
             signature = tuple(node_seq)
-            if signature not in seen_signatures:
+            root_relation = int(relation_seq[0]) if relation_seq else None
+            is_retained = retained_root_relations is None or root_relation in retained_root_relations
+            if is_retained and signature not in seen_signatures:
                 seen_signatures.add(signature)
                 paths.append((list(node_seq), list(relation_seq)))
                 if len(paths) >= max_paths:
@@ -519,6 +498,7 @@ def precompute_h_kg_paths(
     hops: int = 3,
     decay_factor: float = 0.5,
     max_paths: int = 32,
+    relation_limit: int | None = None,
     force_recompute: bool = False,
 ) -> dict[str, Tensor]:
     """Precompute per-class path tokens for path-level KG attention."""
@@ -527,7 +507,7 @@ def precompute_h_kg_paths(
     if max_paths <= 0:
         raise ValueError("max_paths must be >= 1")
 
-    cache_path = _resolve_path_cache_path(cfg, hops=hops, max_paths=max_paths)
+    cache_path = _resolve_path_cache_path(cfg, hops=hops, max_paths=max_paths, relation_limit=relation_limit)
     if cache_path.exists() and not force_recompute:
         with np.load(cache_path, allow_pickle=False) as cached:
             path_embeddings = cached["path_embeddings"]
@@ -548,6 +528,26 @@ def precompute_h_kg_paths(
     adj = _load_adjacency(cfg.kg2id_path, num_nodes)
     d_kg = int(node_embeddings.shape[1])
 
+    class_relation_nodes: list[dict[int, list[tuple[int, int]]]] = []
+    relation_support: dict[int, int] = defaultdict(int)
+    for node_id in class_node_ids:
+        if node_id is None or not (0 <= node_id < num_nodes):
+            class_relation_nodes.append({})
+            continue
+
+        rel_nodes = _dfs_root_relation_nodes(adj, int(node_id), hops=hops)
+        class_relation_nodes.append(rel_nodes)
+        for relation_id, neighbors in rel_nodes.items():
+            relation_support[int(relation_id)] += len(neighbors)
+
+    retained_relation_ids = [
+        relation_id
+        for relation_id, _ in sorted(relation_support.items(), key=lambda item: (-item[1], item[0]))
+    ]
+    if relation_limit is not None and relation_limit > 0:
+        retained_relation_ids = retained_relation_ids[:relation_limit]
+    retained_relation_set = set(retained_relation_ids)
+
     num_classes = len(class_names)
     path_embeddings = np.zeros((num_classes, max_paths, d_kg), dtype=np.float32)
     path_mask = np.zeros((num_classes, max_paths), dtype=bool)
@@ -560,7 +560,15 @@ def precompute_h_kg_paths(
         if node_id is None or not (0 <= node_id < num_nodes):
             continue
 
-        for path_idx, (node_seq, relation_seq) in enumerate(_k_hop_paths(adj, int(node_id), hops=hops, max_paths=max_paths)):
+        retained_paths = _k_hop_paths(
+            adj,
+            int(node_id),
+            hops=hops,
+            max_paths=max_paths,
+            retained_root_relations=retained_relation_set if retained_relation_set else None,
+        )
+
+        for path_idx, (node_seq, relation_seq) in enumerate(retained_paths):
             node_arr = np.asarray(node_seq, dtype=np.int64)
             depth_arr = np.arange(len(node_seq), dtype=np.float32)
             weights = (decay_factor ** depth_arr).reshape(-1, 1)
@@ -581,6 +589,7 @@ def precompute_h_kg_paths(
         path_hops=path_hops,
         relation_seqs=relation_seqs,
         node_seqs=node_seqs,
+        relation_ids=np.asarray(retained_relation_ids, dtype=np.int64),
     )
 
     return {

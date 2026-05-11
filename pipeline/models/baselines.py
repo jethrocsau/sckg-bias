@@ -140,21 +140,6 @@ def _delta_mean(h0_proj: Tensor, h_known_proj: Tensor, known_mask: Tensor) -> Te
     return _masked_mean(delta, known_mask)
 
 
-def _pooled_kg_context(
-    y_known: Tensor,
-    known_mask: Tensor,
-    h_kg_multi: Tensor | None,
-    d_kg: int,
-    device: torch.device,
-    dtype: torch.dtype,
-) -> Tensor:
-    if h_kg_multi is None:
-        return torch.zeros((y_known.shape[0], d_kg), device=device, dtype=dtype)
-    kg_class = torch.mean(h_kg_multi, dim=1)
-    kg_known = kg_class[y_known]
-    return _masked_mean(kg_known, known_mask)
-
-
 class MeanDecayRelationPool(nn.Module):
     def forward(self, h_kg_multi: KGContextInput) -> tuple[Tensor, Tensor]:
         rel_embeddings, rel_mask = _extract_relation_context(h_kg_multi)
@@ -262,6 +247,83 @@ class HierarchicalRelationPool(nn.Module):
             self.relation_pool = MeanDecayRelationPool()
         else:
             self.relation_pool = RelationGATPool(d_kg, hidden_dim)
+
+    def supports_ragged_fast_path(self) -> bool:
+        return isinstance(self.subtree_pool, MeanDecaySubtreePool) and isinstance(self.relation_pool, MeanDecayRelationPool)
+
+    def forward_ragged(
+        self,
+        h_kg_multi: dict[str, Tensor],
+        class_ids: Tensor | None = None,
+    ) -> tuple[Tensor, Tensor] | None:
+        if not self.supports_ragged_fast_path():
+            return None
+        if "member_offsets" not in h_kg_multi or "member_embeddings_flat" not in h_kg_multi:
+            return None
+
+        root_embeddings = h_kg_multi["root_embeddings"]
+        member_offsets = h_kg_multi["member_offsets"]
+        member_embeddings_flat = h_kg_multi["member_embeddings_flat"]
+        member_weights_flat = h_kg_multi.get("member_weights_flat")
+        rel_mask = h_kg_multi.get("rel_mask")
+
+        if class_ids is not None:
+            flat_class_ids = class_ids.reshape(-1)
+            root_embeddings = root_embeddings[flat_class_ids]
+            member_offsets = member_offsets[flat_class_ids]
+            if rel_mask is not None:
+                rel_mask = rel_mask[flat_class_ids]
+
+        num_samples, num_rel, _ = member_offsets.shape
+        base_d_kg = root_embeddings.shape[-1]
+        device = root_embeddings.device
+        dtype = root_embeddings.dtype
+
+        starts = member_offsets[..., 0]
+        ends = member_offsets[..., 1]
+        counts = (ends - starts).long()
+        flat_counts = counts.reshape(-1)
+
+        pooled_members = torch.zeros((num_samples, num_rel, base_d_kg), device=device, dtype=dtype)
+
+        total = int(flat_counts.sum().item())
+        if total > 0:
+            pair_ids = torch.repeat_interleave(torch.arange(num_samples * num_rel, device=device), flat_counts)
+            cum_counts = torch.cat([
+                torch.zeros(1, dtype=torch.long, device=device),
+                flat_counts.cumsum(0)[:-1],
+            ])
+            pos_in_slot = torch.arange(total, device=device) - torch.repeat_interleave(cum_counts, flat_counts)
+            flat_starts = starts.reshape(-1)
+            global_flat_indices = flat_starts[pair_ids] + pos_in_slot
+
+            sample_ids = pair_ids // num_rel
+            rel_ids = pair_ids % num_rel
+
+            member_emb = member_embeddings_flat[global_flat_indices]
+            if member_weights_flat is not None:
+                member_w = member_weights_flat[global_flat_indices].to(dtype)
+            else:
+                member_w = torch.ones(total, device=device, dtype=dtype)
+
+            weighted_members = member_emb * member_w.unsqueeze(-1)
+            pooled_members.index_put_((sample_ids, rel_ids), weighted_members, accumulate=True)
+
+            denom = torch.zeros((num_samples, num_rel), device=device, dtype=dtype)
+            denom.index_put_((sample_ids, rel_ids), member_w, accumulate=True)
+            pooled_members = pooled_members / denom.unsqueeze(-1).clamp_min(1e-8)
+
+        rel_embeddings = root_embeddings + pooled_members
+        rel_embeddings = self.subtree_pool.out_proj(rel_embeddings)
+
+        if rel_mask is None:
+            rel_mask = counts > 0
+
+        rel_mask_f = rel_mask.unsqueeze(-1).to(rel_embeddings.dtype)
+        pooled = torch.sum(rel_embeddings * rel_mask_f, dim=1) / rel_mask_f.sum(dim=1).clamp_min(1.0)
+        weights = rel_mask.to(rel_embeddings.dtype)
+        weights = weights / weights.sum(dim=1, keepdim=True).clamp_min(1.0)
+        return pooled, weights
 
     def forward(self, h_kg_multi: KGContextInput) -> tuple[Tensor, Tensor]:
         if isinstance(h_kg_multi, dict):
@@ -434,7 +496,9 @@ class _KGPoolMixin:
             subtree_pool_method = getattr(cfg, "kg_subtree_pool_method", "match")
             if subtree_pool_method == "match":
                 subtree_pool_method = "gat" if self.kg_embed_method in {"gat", "dgl_gat"} else "mean_decay"
-            relation_pool_method = getattr(cfg, "kg_relation_pool_method", "gat")
+            relation_pool_method = getattr(cfg, "kg_relation_pool_method", "match")
+            if relation_pool_method == "match":
+                relation_pool_method = "gat" if self.kg_embed_method in {"gat", "dgl_gat"} else "mean_decay"
             self.kg_pool = HierarchicalRelationPool(
                 cfg.d_kg,
                 cfg.d_model,
@@ -500,6 +564,18 @@ class _SharedBaselineMLP(nn.Module, _KGPoolMixin):
             return torch.zeros((0, self.kg_proj.in_features), device=device, dtype=dtype), None
 
         if isinstance(h_kg_multi, dict) and "member_offsets" in h_kg_multi:
+            if isinstance(self.kg_pool, HierarchicalRelationPool):
+                fast_pooled = self.kg_pool.forward_ragged(h_kg_multi, y_known)
+                if fast_pooled is not None:
+                    pooled_flat, relation_weights = fast_pooled
+                    batch_size, num_known = y_known.shape
+                    pooled_known = pooled_flat.reshape(batch_size, num_known, -1)
+                    pooled = _masked_mean(pooled_known, known_mask)
+                    if relation_weights is not None:
+                        relation_weights = relation_weights.reshape(batch_size, num_known, -1)
+                        mask_f = known_mask.unsqueeze(-1).to(relation_weights.dtype)
+                        relation_weights = torch.sum(relation_weights * mask_f, dim=1) / mask_f.sum(dim=1).clamp_min(1.0)
+                    return pooled, relation_weights
             packed_known = _pack_ragged_relation_members(h_kg_multi, y_known)
             if packed_known is None:
                 return torch.zeros((0, self.kg_proj.in_features), device=device, dtype=dtype), None

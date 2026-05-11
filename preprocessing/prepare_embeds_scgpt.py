@@ -3,7 +3,6 @@ import argparse
 import gc
 import glob
 import json
-import os
 import time
 from collections import Counter
 from collections import defaultdict
@@ -13,7 +12,6 @@ import anndata as ad
 import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
-import scanpy as sc
 import torch
 from scgpt.model import TransformerModel
 from scgpt.utils import load_pretrained
