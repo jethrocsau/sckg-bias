@@ -7,20 +7,19 @@ __pycache__/
 
 # Data and generated artifacts
 data/
-kg/
-archive/
+kg/data/
 results/
+archive/
 logs/
-figs/
 test_run_results/
 scGPT_human/
-models/variant_runs/
+working/
 
 # Large local-only files at repo root
 *.npz
 *.pt
 *.bin
-*.csv
+data/*.csv
 
 # External references / notebooks / local docs
 reference/

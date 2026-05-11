@@ -5,7 +5,7 @@ import ast
 import matplotlib.pyplot as plt
 
 # 1. Load your generated embeddings
-data_path = "data/tahoe_embeddings_parquet.npz"
+data_path = "data/scgpt_embeds/tahoe_embeddings_parquet.npz"
 print(f"Loading embeddings from {data_path}...")
 data = np.load(data_path, allow_pickle=True)
 

@@ -594,7 +594,7 @@ def main():
     parser.add_argument(
         "--input",
         type=Path,
-        default=Path("data/tahoe_embeddings_parquet*.npz"),
+        default=Path("data/scgpt_embeds/tahoe_embeddings_parquet*.npz"),
         help=(
             "Path/pattern to embeddings NPZ where keys are (cell_line, drug, plate). "
             "Defaults to parquet NPZ prefix shards in data/ (continuous is deprecated)."

@@ -15,24 +15,27 @@ import pandas as pd
 import pyarrow.parquet as pq
 import scanpy as sc
 import torch
-from scgpt.model import TransformerModel
-from scgpt.utils import load_pretrained
-import torchtext.vocab as torchtext_vocab
+
+try:
+    import scvi
+
+    HAS_SCVI = True
+except Exception:
+    scvi = None
+    HAS_SCVI = False
 
 SAVE_INTERVAL = 100000
-BATCH_SIZE = 1024
+BATCH_SIZE = 32
 MAX_RETRIES = 3
-DEFAULT_RESUME_FILE = "train-00442-of-03388.parquet"
+DEFAULT_RESUME_FILE = "train-00000-of-03388.parquet"
 DEFAULT_PARQUET_SHARD_SIZE = 400
 DEFAULT_MANIFEST_SUFFIX = ".shards_manifest.json"
-
-
-if not hasattr(torchtext_vocab, "vocab"):
-    def _compat_torchtext_vocab(ordered_dict, min_freq=1):
-        counter = Counter(ordered_dict)
-        return torchtext_vocab.Vocab(counter, min_freq=min_freq, specials=[])
-
-    torchtext_vocab.vocab = _compat_torchtext_vocab
+DEFAULT_EMBED_METHOD = "auto"
+DEFAULT_LATENT_DIM = 64
+DEFAULT_SCVI_MAX_EPOCHS = 20
+DEFAULT_SCVI_BATCH_SIZE = 256
+DEFAULT_SCVI_QUERY_MAX_EPOCHS = 10
+DEFAULT_SCVI_HUB_REPO = "vevotx/Tahoe-100M-SCVI-v1"
 
 
 def get_paths():
@@ -40,14 +43,62 @@ def get_paths():
     repo_root = script_dir.parent
     root_dir = repo_root.parent
     parquet_dir = (root_dir / "GeneJEPA/hf_data_cache/data/data").resolve()
-    model_dir = repo_root / "scGPT_human"
-    output_path = repo_root / "data" / "tahoe_embeddings_parquet.npz"
+    output_path = repo_root / "data" / "x1_embeds" / "scvi_embeddings_parquet.npz"
     map_path = repo_root / "tahoe_to_primekg_map.csv"
-    return script_dir, parquet_dir, model_dir, output_path, map_path
+    return script_dir, parquet_dir, output_path, map_path
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Prepare scGPT embeddings from parquet batches.")
+    parser = argparse.ArgumentParser(description="Prepare SCVI/PCA embeddings from parquet batches.")
+    parser.add_argument(
+        "--embed-method",
+        type=str,
+        default=DEFAULT_EMBED_METHOD,
+        choices=["auto", "scvi", "pca"],
+        help="Embedding backend: auto (prefer SCVI, fallback to PCA), scvi, or pca.",
+    )
+    parser.add_argument(
+        "--latent-dim",
+        type=int,
+        default=DEFAULT_LATENT_DIM,
+        help="Embedding dimension to produce for each cell.",
+    )
+    parser.add_argument(
+        "--scvi-max-epochs",
+        type=int,
+        default=DEFAULT_SCVI_MAX_EPOCHS,
+        help="Max epochs for SCVI training per batch.",
+    )
+    parser.add_argument(
+        "--scvi-batch-size",
+        type=int,
+        default=DEFAULT_SCVI_BATCH_SIZE,
+        help="Mini-batch size used during SCVI training.",
+    )
+    parser.add_argument(
+        "--use-scvi-hub",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="When SCVI is selected, use pretrained SCVI Hub model for query embeddings.",
+    )
+    parser.add_argument(
+        "--scvi-hub-repo",
+        type=str,
+        default=DEFAULT_SCVI_HUB_REPO,
+        help="Hugging Face Hub repo for pretrained SCVI model.",
+    )
+    parser.add_argument(
+        "--scvi-hub-cache-dir",
+        type=str,
+        default=None,
+        help="Optional cache directory for SCVI Hub model download.",
+    )
+    parser.add_argument(
+        "--scvi-query-max-epochs",
+        type=int,
+        default=DEFAULT_SCVI_QUERY_MAX_EPOCHS,
+        help="Max epochs to adapt SCVI query model when using Hub model.",
+    )
     parser.add_argument(
         "--start-file",
         type=str,
@@ -76,7 +127,7 @@ def parse_args():
         "--output-path",
         type=str,
         default=None,
-        help="Output NPZ path. If omitted, defaults to data/tahoe_embeddings_parquet.npz.",
+        help="Output NPZ path. If omitted, defaults to data/x1_embeds/scvi_embeddings_parquet.npz.",
     )
     parser.add_argument(
         "--overwrite-output",
@@ -230,155 +281,129 @@ def parse_target_drugs(map_path: Path, center_drugs: set[str] | None = None):
     return target_drugs
 
 
-def load_vocab(model_dir: Path):
-    vocab_path = model_dir / "vocab.json"
-    with vocab_path.open("r") as f:
-        vocab_data = json.load(f)
+def load_model_bundle(
+    embed_method: str,
+    latent_dim: int,
+    scvi_max_epochs: int,
+    scvi_batch_size: int,
+    device: str,
+    use_scvi_hub: bool,
+    scvi_hub_repo: str,
+    scvi_hub_cache_dir: str | None,
+    scvi_query_max_epochs: int,
+):
+    effective_method = embed_method
+    if embed_method == "auto":
+        effective_method = "scvi" if HAS_SCVI else "pca"
+    if effective_method == "scvi" and not HAS_SCVI:
+        raise ImportError(
+            "scvi-tools is not installed. Use --embed-method pca or install scvi-tools."
+        )
 
-    if not isinstance(vocab_data, dict):
-        raise ValueError(f"Expected vocab.json to be a dict of gene->token_id: {vocab_path}")
+    hub_scvi_model = None
+    if effective_method == "scvi" and use_scvi_hub:
+        try:
+            hub_cache = Path(scvi_hub_cache_dir).expanduser().resolve() if scvi_hub_cache_dir else None
+            print(f"Loading SCVI Hub model from {scvi_hub_repo}...")
+            hub_model = scvi.hub.HubModel.pull_from_huggingface_hub(
+                repo_name=scvi_hub_repo,
+                cache_dir=str(hub_cache) if hub_cache else None,
+            )
+            hub_scvi_model = hub_model.model
+            hub_latent_dim = int(getattr(hub_scvi_model.module, "n_latent", latent_dim))
+            print(f"Loaded SCVI Hub model (n_latent={hub_latent_dim}).")
+            if hub_latent_dim != int(latent_dim):
+                print(
+                    "Note: requested --latent-dim "
+                    f"{latent_dim} differs from hub model latent {hub_latent_dim}; "
+                    "embeddings will be padded/truncated to requested size."
+                )
+        except Exception as exc:
+            print(f"Warning: failed to load SCVI Hub model ({exc}); falling back to local SCVI training.")
 
-    token_to_id = {str(gene): int(token_id) for gene, token_id in vocab_data.items()}
-    if not token_to_id:
-        raise ValueError(f"Empty vocabulary in {vocab_path}")
-
-    return token_to_id
-
-
-def load_model_bundle(model_dir: Path, token_to_id, device: str):
-    model_config_file = model_dir / "args.json"
-    model_file = model_dir / "best_model.pt"
-
-    with model_config_file.open("r") as f:
-        model_configs = json.load(f)
-
-    pad_token = model_configs.get("pad_token", "<pad>")
-    if pad_token not in token_to_id:
-        raise ValueError(f"Pad token '{pad_token}' not found in vocab.json")
-    if "<cls>" not in token_to_id:
-        raise ValueError("'<cls>' token not found in vocab.json")
-
-    model = TransformerModel(
-        ntoken=len(token_to_id),
-        d_model=model_configs["embsize"],
-        nhead=model_configs["nheads"],
-        d_hid=model_configs["d_hid"],
-        nlayers=model_configs["nlayers"],
-        nlayers_cls=model_configs.get("n_layers_cls", model_configs.get("nlayers_cls", 3)),
-        n_cls=1,
-        vocab=token_to_id,
-        dropout=model_configs["dropout"],
-        pad_token=pad_token,
-        pad_value=model_configs.get("pad_value", -2),
-        do_mvc=True,
-        do_dab=False,
-        use_batch_labels=False,
-        domain_spec_batchnorm=False,
-        input_emb_style=model_configs.get("input_emb_style", "continuous"),
-        n_input_bins=model_configs.get("n_bins", None),
-        explicit_zero_prob=False,
-        use_fast_transformer=False,
-        fast_transformer_backend="flash",
-        pre_norm=False,
-    )
-
-    state_dict = torch.load(model_file, map_location=device)
-    load_pretrained(model, state_dict, verbose=False)
-    model.to(device)
-    model.eval()
-
+    print(f"Embedding backend: {effective_method} (requested={embed_method})")
     return {
-        "model": model,
-        "model_configs": model_configs,
+        "embed_method": effective_method,
         "device": device,
-        "pad_token_id": token_to_id[pad_token],
-        "cls_token_id": token_to_id["<cls>"],
-        "pad_value": float(model_configs.get("pad_value", -2)),
-        "embsize": int(model_configs["embsize"]),
+        "embsize": int(latent_dim),
+        "scvi_max_epochs": int(scvi_max_epochs),
+        "scvi_batch_size": int(scvi_batch_size),
+        "scvi_query_max_epochs": int(scvi_query_max_epochs),
+        "scvi_hub_model": hub_scvi_model,
     }
 
 
-def embed_adata_with_loaded_model(adata_batch: ad.AnnData, token_to_id, model_bundle, max_length=1200):
+def embed_adata_with_x1(adata_batch: ad.AnnData, model_bundle):
+    """Generate embeddings using SCVI or PCA."""
     if adata_batch.n_obs == 0:
         return np.zeros((0, model_bundle["embsize"]), dtype=np.float32)
 
-    model = model_bundle["model"]
-    model_configs = model_bundle["model_configs"]
-    device = model_bundle["device"]
-    pad_token_id = model_bundle["pad_token_id"]
-    cls_token_id = model_bundle["cls_token_id"]
-    pad_value = model_bundle["pad_value"]
+    method = model_bundle["embed_method"]
+    embsize = model_bundle["embsize"]
 
-    gene_ids = np.array([token_to_id.get(g, -1) for g in adata_batch.var_names], dtype=np.int64)
-    valid_mask = gene_ids >= 0
-    if not np.any(valid_mask):
-        return np.zeros((adata_batch.n_obs, model_bundle["embsize"]), dtype=np.float32)
+    try:
+        if method == "scvi":
+            adata_work = adata_batch.copy()
+            hub_scvi_model = model_bundle.get("scvi_hub_model")
 
-    adata_valid = adata_batch[:, valid_mask]
-    gene_ids = gene_ids[valid_mask]
+            if hub_scvi_model is not None:
+                if "counts" not in adata_work.layers:
+                    adata_work.layers["counts"] = adata_work.X.copy()
 
-    X = adata_valid.X.tocsr() if hasattr(adata_valid.X, "tocsr") else adata_valid.X
-    n_cells = adata_valid.n_obs
-    batch_size = BATCH_SIZE
-    all_embeddings = np.zeros((n_cells, model_bundle["embsize"]), dtype=np.float32)
-
-    with torch.no_grad(), torch.amp.autocast("cuda", enabled=(device == "cuda")):
-        out_pos = 0
-        for start in range(0, n_cells, batch_size):
-            end = min(start + batch_size, n_cells)
-            genes_list = []
-            expr_list = []
-
-            for i in range(start, end):
-                row = X[i]
-                if hasattr(row, "indices") and hasattr(row, "data"):
-                    nonzero_idx = row.indices
-                    values = row.data.astype(np.float32, copy=False)
+                scvi.model.SCVI.prepare_query_anndata(adata_work, hub_scvi_model)
+                query_model = scvi.model.SCVI.load_query_data(adata_work, hub_scvi_model)
+                if model_bundle["scvi_query_max_epochs"] > 0 and adata_work.n_obs > 1:
+                    query_model.train(
+                        max_epochs=model_bundle["scvi_query_max_epochs"],
+                        batch_size=min(model_bundle["scvi_batch_size"], max(1, adata_work.n_obs)),
+                        train_size=1.0,
+                    )
+                embeddings = query_model.get_latent_representation(adata_work).astype(np.float32)
+            else:
+                scvi.model.SCVI.setup_anndata(adata_work)
+                scvi_model = scvi.model.SCVI(adata_work, n_latent=embsize)
+                scvi_model.train(
+                    max_epochs=model_bundle["scvi_max_epochs"],
+                    batch_size=min(model_bundle["scvi_batch_size"], max(1, adata_work.n_obs)),
+                    train_size=1.0,
+                )
+                embeddings = scvi_model.get_latent_representation(adata_work).astype(np.float32)
+        else:
+            adata_work = adata_batch.copy()
+            min_dim = min(adata_work.n_obs, adata_work.n_vars)
+            if min_dim <= 1:
+                fallback = np.asarray(adata_work.X.sum(axis=1), dtype=np.float32).reshape(-1, 1)
+                if fallback.shape[1] < embsize:
+                    pad = np.zeros((fallback.shape[0], embsize - fallback.shape[1]), dtype=np.float32)
+                    embeddings = np.concatenate([fallback, pad], axis=1)
                 else:
-                    row_arr = np.asarray(row).ravel()
-                    nonzero_idx = np.nonzero(row_arr)[0]
-                    values = row_arr[nonzero_idx].astype(np.float32, copy=False)
+                    embeddings = fallback[:, :embsize]
+            else:
+                n_pca = max(1, min(embsize, adata_work.n_obs - 1, adata_work.n_vars - 1))
+                sc.tl.pca(adata_work, n_comps=n_pca, svd_solver="arpack")
+                pca_embeddings = adata_work.obsm["X_pca"].astype(np.float32)
+                if pca_embeddings.shape[1] < embsize:
+                    pad = np.zeros((pca_embeddings.shape[0], embsize - pca_embeddings.shape[1]), dtype=np.float32)
+                    embeddings = np.concatenate([pca_embeddings, pad], axis=1)
+                else:
+                    embeddings = pca_embeddings
+    except Exception as exc:
+        print(f"Error during embedding ({method}): {exc}")
+        return np.zeros((adata_batch.n_obs, embsize), dtype=np.float32)
 
-                genes = gene_ids[nonzero_idx]
-                expr = values
+    if embeddings.shape[1] != embsize:
+        if embeddings.shape[1] < embsize:
+            pad = np.zeros((embeddings.shape[0], embsize - embeddings.shape[1]), dtype=np.float32)
+            embeddings = np.concatenate([embeddings, pad], axis=1)
+        else:
+            embeddings = embeddings[:, :embsize]
 
-                genes = np.insert(genes, 0, cls_token_id)
-                expr = np.insert(expr, 0, pad_value)
-
-                if len(genes) > max_length:
-                    keep_n = max_length - 1
-                    genes = np.concatenate(([genes[0]], genes[1 : 1 + keep_n]))
-                    expr = np.concatenate(([expr[0]], expr[1 : 1 + keep_n]))
-
-                genes_list.append(torch.from_numpy(genes).long())
-                expr_list.append(torch.from_numpy(expr).float())
-
-            max_len = max(g.size(0) for g in genes_list)
-            input_gene_ids = torch.full((len(genes_list), max_len), pad_token_id, dtype=torch.long)
-            input_expr = torch.full((len(expr_list), max_len), pad_value, dtype=torch.float32)
-
-            for row_i, (g, e) in enumerate(zip(genes_list, expr_list)):
-                seq_len = g.size(0)
-                input_gene_ids[row_i, :seq_len] = g
-                input_expr[row_i, :seq_len] = e
-
-            input_gene_ids = input_gene_ids.to(device)
-            input_expr = input_expr.to(device)
-            src_key_padding_mask = input_gene_ids.eq(pad_token_id)
-
-            encoded = model._encode(
-                input_gene_ids,
-                input_expr,
-                src_key_padding_mask=src_key_padding_mask,
-                batch_labels=None,
-            )
-            cls_embeddings = encoded[:, 0, :].detach().cpu().numpy().astype(np.float32)
-            all_embeddings[out_pos : out_pos + cls_embeddings.shape[0]] = cls_embeddings
-            out_pos += cls_embeddings.shape[0]
-
-    norms = np.linalg.norm(all_embeddings, axis=1, keepdims=True)
+    # L2 normalize embeddings
+    norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
     norms[norms == 0] = 1.0
-    return all_embeddings / norms
+    embeddings = embeddings / norms
+
+    return embeddings
 
 
 def load_existing_embeddings(output_path: Path, target_drugs, allowed_star_groups: set[tuple[str, str]] | None = None):
@@ -434,48 +459,59 @@ def save_checkpoints(acc_dict, path: Path, total_records_read: int):
     print(f"Checkpoint saved to {path} at {total_records_read} records.")
 
 
-def create_anndata_from_batch(df: pd.DataFrame, token_to_id):
-    token_ids_sorted = sorted(set(token_to_id.values()))
-    token_id_to_col_idx = {token_id: idx for idx, token_id in enumerate(token_ids_sorted)}
-    id_to_token = {token_id: token for token, token_id in token_to_id.items()}
+def create_anndata_from_batch(df: pd.DataFrame):
+    """
+    Create AnnData object from parquet batch.
+    Genes and expressions are stored as lists in the dataframe.
+    """
+    # Collect all gene names
+    all_genes = set()
+    for genes_list in df["genes"]:
+        if genes_list is not None and len(genes_list) > 0:
+            # Skip first element (CLS token from scGPT preprocessing)
+            all_genes.update(genes_list[1:])
+    
+    gene_names = sorted(all_genes)
+    gene_to_idx = {g: i for i, g in enumerate(gene_names)}
 
+    # Build sparse CSR matrix
     data, indices, indptr = [], [], [0]
-
+    
     for _, row in df.iterrows():
         genes = row["genes"]
         expressions = row["expressions"]
-
-        if len(genes) > 0 and len(expressions) > 0:
+        
+        if genes is not None and expressions is not None and len(genes) > 0 and len(expressions) > 0:
+            # Skip first element (CLS token)
             genes = genes[1:]
             expressions = expressions[1:]
-
-        for gene_token_id, expression_value in zip(genes, expressions):
-            if gene_token_id in token_id_to_col_idx:
-                indices.append(token_id_to_col_idx[gene_token_id])
-                data.append(float(expression_value))
-
+        
+        for gene, expression in zip(genes, expressions):
+            if gene in gene_to_idx:
+                indices.append(gene_to_idx[gene])
+                data.append(float(expression))
+        
         indptr.append(len(data))
-
+    
     from scipy.sparse import csr_matrix
-
+    
     matrix = csr_matrix(
         (np.asarray(data, dtype=np.float32), np.asarray(indices, dtype=np.int32), np.asarray(indptr, dtype=np.int64)),
-        shape=(len(df), len(token_ids_sorted)),
+        shape=(len(df), len(gene_names)),
     )
-
-    var_names = [id_to_token[token_id] for token_id in token_ids_sorted]
-    var = pd.DataFrame(index=pd.Index(var_names, name="gene_symbol"))
+    
+    var = pd.DataFrame(index=pd.Index(gene_names, name="gene_symbol"))
     var["index"] = var.index
     var.index = var.index.astype(str)
-
+    
     obs_columns = [col for col in ["cell_line_id", "drug", "plate"] if col in df.columns]
     if obs_columns:
         obs = df[obs_columns].copy()
     else:
         obs = pd.DataFrame(index=np.arange(len(df)))
-
+    
     obs.index = obs.index.astype(str)
-
+    
     return ad.AnnData(X=matrix, obs=obs, var=var)
 
 
@@ -488,7 +524,6 @@ def build_condition_key(obs_row):
 
 def process_parquet_file(
     parquet_file: Path,
-    token_to_id,
     target_drugs,
     allowed_star_groups: set[tuple[str, str]] | None,
     condition_embeddings_acc,
@@ -530,18 +565,13 @@ def process_parquet_file(
         success = False
         for attempt in range(MAX_RETRIES):
             try:
-                adata_batch = create_anndata_from_batch(batch_df, token_to_id)
+                adata_batch = create_anndata_from_batch(batch_df)
                 if adata_batch.n_obs == 0:
                     success = True
                     break
-
-                sc.pp.normalize_total(adata_batch, target_sum=1e4)
-                sc.pp.log1p(adata_batch)
-                cell_embeddings = embed_adata_with_loaded_model(
-                    adata_batch,
-                    token_to_id,
-                    model_bundle,
-                )
+                
+                # Tahoe 100m is already normalized
+                cell_embeddings = embed_adata_with_x1(adata_batch, model_bundle)
 
                 for i in range(adata_batch.n_obs):
                     obs_row = adata_batch.obs.iloc[i]
@@ -640,7 +670,7 @@ def collect_center_star_groups(parquet_files, center_drugs: set[str]):
 
 def main():
     args = parse_args()
-    script_dir, parquet_dir, model_dir, output_path, map_path = get_paths()
+    script_dir, parquet_dir, output_path, map_path = get_paths()
     if args.output_path:
         output_candidate = Path(args.output_path).expanduser()
         if output_candidate.suffix.lower() != ".npz":
@@ -657,9 +687,6 @@ def main():
 
     if not all_parquet_files:
         raise FileNotFoundError(f"No parquet files found at {parquet_dir}")
-
-    if not model_dir.exists():
-        raise FileNotFoundError(f"Model directory not found: {model_dir}")
 
     resume_start, shard_start, shard_end, parquet_files = resolve_processing_window(
         parquet_files=all_parquet_files,
@@ -702,11 +729,19 @@ def main():
             return
         print(f"Using shard manifest: {manifest_path}")
 
-    token_to_id = load_vocab(model_dir)
-
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Embedding device: {device} (fast transformer disabled; no flash-attn required).")
-    model_bundle = load_model_bundle(model_dir, token_to_id, device)
+    print(f"Embedding device: {device}")
+    model_bundle = load_model_bundle(
+        embed_method=args.embed_method,
+        latent_dim=args.latent_dim,
+        scvi_max_epochs=args.scvi_max_epochs,
+        scvi_batch_size=args.scvi_batch_size,
+        device=device,
+        use_scvi_hub=args.use_scvi_hub,
+        scvi_hub_repo=args.scvi_hub_repo,
+        scvi_hub_cache_dir=args.scvi_hub_cache_dir,
+        scvi_query_max_epochs=args.scvi_query_max_epochs,
+    )
 
     center_drugs = {d.strip() for d in args.center_drugs.split(",") if d.strip()}
     target_drugs = parse_target_drugs(map_path, center_drugs=center_drugs)
@@ -756,7 +791,6 @@ def main():
         print(f"Processing {Path(parquet_file).name}...")
         total_records_read = process_parquet_file(
             Path(parquet_file),
-            token_to_id,
             target_drugs,
             allowed_star_groups,
             condition_embeddings_acc,
