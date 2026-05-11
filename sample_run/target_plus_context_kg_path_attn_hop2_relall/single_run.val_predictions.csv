@@ -1,0 +1,230 @@
+sample_id,split,true_edge_class_idx,true_edge_name,pred_edge_class_idx,pred_edge_name,correct,confidence,dominant_factor_idx,gate_weight_factor_0
+0,val,2,Acetohexamide,2,Acetohexamide,True,0.7200939059257507,0,1.0
+1,val,3,Adenine,3,Adenine,True,0.6802200675010681,0,1.0
+2,val,4,Adenosine,4,Adenosine,True,0.8252952694892883,0,1.0
+3,val,6,Aliskiren,6,Aliskiren,True,0.6111677289009094,0,1.0
+4,val,7,Allantoin,7,Allantoin,True,0.9694501757621765,0,1.0
+5,val,11,Amsacrine,11,Amsacrine,True,0.9553643465042114,0,1.0
+6,val,17,Artesunate,17,Artesunate,True,0.8393753170967102,0,1.0
+7,val,24,Bimatoprost,24,Bimatoprost,True,0.8068984746932983,0,1.0
+8,val,30,Busulfan,30,Busulfan,True,0.40630513429641724,0,1.0
+9,val,36,Ciclopirox,36,Ciclopirox,True,0.683698296546936,0,1.0
+10,val,42,Clotrimazole,42,Clotrimazole,True,0.7602071762084961,0,1.0
+11,val,52,Demeclocycline,52,Demeclocycline,True,0.9366288185119629,0,1.0
+12,val,58,Docetaxel,58,Docetaxel,True,0.8479918241500854,0,1.0
+13,val,74,Folic acid,74,Folic acid,True,0.9030448198318481,0,1.0
+14,val,77,Furosemide,77,Furosemide,True,0.7252671122550964,0,1.0
+15,val,78,Fusidic acid,78,Fusidic acid,True,0.8405598998069763,0,1.0
+16,val,81,Gemfibrozil,81,Gemfibrozil,True,0.6326944231987,0,1.0
+17,val,85,Hexylresorcinol,85,Hexylresorcinol,True,0.961365818977356,0,1.0
+18,val,93,Larotrectinib,93,Larotrectinib,True,0.7468301057815552,0,1.0
+19,val,94,Lipoic acid,94,Lipoic acid,True,0.8901650905609131,0,1.0
+20,val,100,Medroxyprogesterone acetate,100,Medroxyprogesterone acetate,True,0.9351117610931396,0,1.0
+21,val,111,Olanzapine,111,Olanzapine,True,0.941435694694519,0,1.0
+22,val,124,Pentagastrin,124,Pentagastrin,True,0.9613829255104065,0,1.0
+23,val,132,Pyridoxine,132,Pyridoxine,True,0.8254286646842957,0,1.0
+24,val,133,Quinestrol,133,Quinestrol,True,0.9461858868598938,0,1.0
+25,val,134,Radotinib,134,Radotinib,True,0.9367125034332275,0,1.0
+26,val,135,Raltitrexed,135,Raltitrexed,True,0.8844481110572815,0,1.0
+27,val,138,Relugolix,138,Relugolix,True,0.6618176102638245,0,1.0
+28,val,139,Resveratrol,139,Resveratrol,True,0.361202597618103,0,1.0
+29,val,142,Rimonabant,142,Rimonabant,True,0.9423778057098389,0,1.0
+30,val,143,Ritonavir,143,Ritonavir,True,0.8239809274673462,0,1.0
+31,val,146,Salicylic acid,146,Salicylic acid,True,0.8065202832221985,0,1.0
+32,val,147,Saquinavir,147,Saquinavir,True,0.9316258430480957,0,1.0
+33,val,148,Selinexor,148,Selinexor,True,0.748186469078064,0,1.0
+34,val,152,Sulfisoxazole,152,Sulfisoxazole,True,0.908603847026825,0,1.0
+35,val,157,Temsirolimus,157,Temsirolimus,True,0.9368460774421692,0,1.0
+36,val,158,Terfenadine,158,Terfenadine,True,0.9202872514724731,0,1.0
+37,val,159,Thymol,159,Thymol,True,0.7901930212974548,0,1.0
+38,val,160,Tofacitinib,11,Amsacrine,False,0.49119794368743896,0,1.0
+39,val,161,Tolcapone,161,Tolcapone,True,0.8417903184890747,0,1.0
+40,val,165,Triamcinolone,165,Triamcinolone,True,0.8991020917892456,0,1.0
+41,val,166,Triclosan,166,Triclosan,True,0.900766909122467,0,1.0
+42,val,167,Trifluridine,167,Trifluridine,True,0.9136202335357666,0,1.0
+43,val,168,Trimetrexate,168,Trimetrexate,True,0.9087927937507629,0,1.0
+44,val,170,Tucidinostat,170,Tucidinostat,True,0.7473452091217041,0,1.0
+45,val,177,Vilanterol,177,Vilanterol,True,0.9212338328361511,0,1.0
+46,val,2,Acetohexamide,2,Acetohexamide,True,0.16756995022296906,0,1.0
+47,val,3,Adenine,3,Adenine,True,0.44429200887680054,0,1.0
+48,val,4,Adenosine,4,Adenosine,True,0.685320258140564,0,1.0
+49,val,6,Aliskiren,6,Aliskiren,True,0.3641299605369568,0,1.0
+50,val,7,Allantoin,7,Allantoin,True,0.9697005748748779,0,1.0
+51,val,11,Amsacrine,11,Amsacrine,True,0.5506809949874878,0,1.0
+52,val,17,Artesunate,17,Artesunate,True,0.8569318652153015,0,1.0
+53,val,24,Bimatoprost,24,Bimatoprost,True,0.7847335934638977,0,1.0
+54,val,30,Busulfan,30,Busulfan,True,0.32214686274528503,0,1.0
+55,val,36,Ciclopirox,111,Olanzapine,False,0.4237563908100128,0,1.0
+56,val,42,Clotrimazole,42,Clotrimazole,True,0.7704336643218994,0,1.0
+57,val,52,Demeclocycline,52,Demeclocycline,True,0.9481068849563599,0,1.0
+58,val,58,Docetaxel,30,Busulfan,False,0.4452648460865021,0,1.0
+59,val,74,Folic acid,74,Folic acid,True,0.8639468550682068,0,1.0
+60,val,77,Furosemide,77,Furosemide,True,0.6800864338874817,0,1.0
+61,val,78,Fusidic acid,78,Fusidic acid,True,0.7725362181663513,0,1.0
+62,val,81,Gemfibrozil,81,Gemfibrozil,True,0.6458145380020142,0,1.0
+63,val,85,Hexylresorcinol,85,Hexylresorcinol,True,0.8365637063980103,0,1.0
+64,val,93,Larotrectinib,93,Larotrectinib,True,0.6541404724121094,0,1.0
+65,val,94,Lipoic acid,94,Lipoic acid,True,0.7594708800315857,0,1.0
+66,val,100,Medroxyprogesterone acetate,100,Medroxyprogesterone acetate,True,0.9111362099647522,0,1.0
+67,val,111,Olanzapine,111,Olanzapine,True,0.9237221479415894,0,1.0
+68,val,124,Pentagastrin,124,Pentagastrin,True,0.9730008244514465,0,1.0
+69,val,132,Pyridoxine,132,Pyridoxine,True,0.8831468224525452,0,1.0
+70,val,133,Quinestrol,133,Quinestrol,True,0.964144229888916,0,1.0
+71,val,134,Radotinib,134,Radotinib,True,0.8608484864234924,0,1.0
+72,val,135,Raltitrexed,135,Raltitrexed,True,0.7638996243476868,0,1.0
+73,val,138,Relugolix,138,Relugolix,True,0.8318343758583069,0,1.0
+74,val,139,Resveratrol,94,Lipoic acid,False,0.19999240338802338,0,1.0
+75,val,142,Rimonabant,142,Rimonabant,True,0.7695958018302917,0,1.0
+76,val,143,Ritonavir,143,Ritonavir,True,0.6860213279724121,0,1.0
+77,val,146,Salicylic acid,146,Salicylic acid,True,0.872952938079834,0,1.0
+78,val,147,Saquinavir,147,Saquinavir,True,0.9019984602928162,0,1.0
+79,val,148,Selinexor,77,Furosemide,False,0.2848365306854248,0,1.0
+80,val,152,Sulfisoxazole,152,Sulfisoxazole,True,0.8809112906455994,0,1.0
+81,val,157,Temsirolimus,157,Temsirolimus,True,0.5966343283653259,0,1.0
+82,val,158,Terfenadine,158,Terfenadine,True,0.8887181282043457,0,1.0
+83,val,159,Thymol,94,Lipoic acid,False,0.45054522156715393,0,1.0
+84,val,160,Tofacitinib,135,Raltitrexed,False,0.4060087203979492,0,1.0
+85,val,161,Tolcapone,161,Tolcapone,True,0.7741376161575317,0,1.0
+86,val,165,Triamcinolone,165,Triamcinolone,True,0.9261333346366882,0,1.0
+87,val,166,Triclosan,166,Triclosan,True,0.9539414048194885,0,1.0
+88,val,167,Trifluridine,167,Trifluridine,True,0.8915640115737915,0,1.0
+89,val,168,Trimetrexate,168,Trimetrexate,True,0.7889658808708191,0,1.0
+90,val,170,Tucidinostat,170,Tucidinostat,True,0.5046929717063904,0,1.0
+91,val,177,Vilanterol,177,Vilanterol,True,0.8932923078536987,0,1.0
+92,val,2,Acetohexamide,2,Acetohexamide,True,0.8542771935462952,0,1.0
+93,val,3,Adenine,3,Adenine,True,0.7004545331001282,0,1.0
+94,val,4,Adenosine,4,Adenosine,True,0.7613604664802551,0,1.0
+95,val,6,Aliskiren,6,Aliskiren,True,0.5532847046852112,0,1.0
+96,val,7,Allantoin,7,Allantoin,True,0.9455759525299072,0,1.0
+97,val,11,Amsacrine,11,Amsacrine,True,0.935955286026001,0,1.0
+98,val,17,Artesunate,17,Artesunate,True,0.8987430334091187,0,1.0
+99,val,24,Bimatoprost,24,Bimatoprost,True,0.8366151452064514,0,1.0
+100,val,30,Busulfan,30,Busulfan,True,0.7244048714637756,0,1.0
+101,val,36,Ciclopirox,36,Ciclopirox,True,0.47985532879829407,0,1.0
+102,val,42,Clotrimazole,42,Clotrimazole,True,0.8945120573043823,0,1.0
+103,val,52,Demeclocycline,52,Demeclocycline,True,0.9524970054626465,0,1.0
+104,val,58,Docetaxel,58,Docetaxel,True,0.8428049683570862,0,1.0
+105,val,74,Folic acid,74,Folic acid,True,0.884894073009491,0,1.0
+106,val,77,Furosemide,77,Furosemide,True,0.7268857359886169,0,1.0
+107,val,78,Fusidic acid,78,Fusidic acid,True,0.8613439202308655,0,1.0
+108,val,81,Gemfibrozil,81,Gemfibrozil,True,0.7496682405471802,0,1.0
+109,val,85,Hexylresorcinol,85,Hexylresorcinol,True,0.9756870269775391,0,1.0
+110,val,93,Larotrectinib,93,Larotrectinib,True,0.9069965481758118,0,1.0
+111,val,94,Lipoic acid,94,Lipoic acid,True,0.8788881897926331,0,1.0
+112,val,100,Medroxyprogesterone acetate,100,Medroxyprogesterone acetate,True,0.9460808038711548,0,1.0
+113,val,111,Olanzapine,111,Olanzapine,True,0.9614485502243042,0,1.0
+114,val,124,Pentagastrin,124,Pentagastrin,True,0.9600489139556885,0,1.0
+115,val,132,Pyridoxine,132,Pyridoxine,True,0.9353847503662109,0,1.0
+116,val,133,Quinestrol,133,Quinestrol,True,0.9629483222961426,0,1.0
+117,val,134,Radotinib,134,Radotinib,True,0.9541336894035339,0,1.0
+118,val,135,Raltitrexed,135,Raltitrexed,True,0.8701786398887634,0,1.0
+119,val,138,Relugolix,138,Relugolix,True,0.9002082943916321,0,1.0
+120,val,139,Resveratrol,139,Resveratrol,True,0.3618709146976471,0,1.0
+121,val,142,Rimonabant,142,Rimonabant,True,0.9072149991989136,0,1.0
+122,val,143,Ritonavir,143,Ritonavir,True,0.8347489833831787,0,1.0
+123,val,146,Salicylic acid,146,Salicylic acid,True,0.902506947517395,0,1.0
+124,val,147,Saquinavir,147,Saquinavir,True,0.9258866310119629,0,1.0
+125,val,148,Selinexor,148,Selinexor,True,0.7539810538291931,0,1.0
+126,val,152,Sulfisoxazole,152,Sulfisoxazole,True,0.8755587339401245,0,1.0
+127,val,157,Temsirolimus,157,Temsirolimus,True,0.9356337785720825,0,1.0
+128,val,158,Terfenadine,158,Terfenadine,True,0.9138627052307129,0,1.0
+129,val,159,Thymol,94,Lipoic acid,False,0.4559224247932434,0,1.0
+130,val,160,Tofacitinib,11,Amsacrine,False,0.44637900590896606,0,1.0
+131,val,161,Tolcapone,161,Tolcapone,True,0.8252596855163574,0,1.0
+132,val,165,Triamcinolone,165,Triamcinolone,True,0.8924161195755005,0,1.0
+133,val,166,Triclosan,166,Triclosan,True,0.9594577550888062,0,1.0
+134,val,167,Trifluridine,167,Trifluridine,True,0.93699711561203,0,1.0
+135,val,168,Trimetrexate,168,Trimetrexate,True,0.8908194303512573,0,1.0
+136,val,170,Tucidinostat,170,Tucidinostat,True,0.8611765503883362,0,1.0
+137,val,177,Vilanterol,177,Vilanterol,True,0.9390431642532349,0,1.0
+138,val,2,Acetohexamide,142,Rimonabant,False,0.7611541748046875,0,1.0
+139,val,3,Adenine,142,Rimonabant,False,0.3928825557231903,0,1.0
+140,val,4,Adenosine,142,Rimonabant,False,0.3042314052581787,0,1.0
+141,val,6,Aliskiren,142,Rimonabant,False,0.8127448558807373,0,1.0
+142,val,7,Allantoin,4,Adenosine,False,0.27486422657966614,0,1.0
+143,val,11,Amsacrine,161,Tolcapone,False,0.21223661303520203,0,1.0
+144,val,17,Artesunate,111,Olanzapine,False,0.2377859205007553,0,1.0
+145,val,24,Bimatoprost,111,Olanzapine,False,0.28005722165107727,0,1.0
+146,val,30,Busulfan,111,Olanzapine,False,0.33511701226234436,0,1.0
+147,val,36,Ciclopirox,36,Ciclopirox,True,0.27182137966156006,0,1.0
+148,val,42,Clotrimazole,142,Rimonabant,False,0.5324127674102783,0,1.0
+149,val,52,Demeclocycline,111,Olanzapine,False,0.2781657576560974,0,1.0
+150,val,58,Docetaxel,132,Pyridoxine,False,0.45392581820487976,0,1.0
+151,val,74,Folic acid,142,Rimonabant,False,0.8782897591590881,0,1.0
+152,val,77,Furosemide,161,Tolcapone,False,0.2808157503604889,0,1.0
+153,val,78,Fusidic acid,111,Olanzapine,False,0.25778624415397644,0,1.0
+154,val,81,Gemfibrozil,111,Olanzapine,False,0.30143529176712036,0,1.0
+155,val,85,Hexylresorcinol,142,Rimonabant,False,0.8459877371788025,0,1.0
+156,val,93,Larotrectinib,142,Rimonabant,False,0.8379718661308289,0,1.0
+157,val,94,Lipoic acid,142,Rimonabant,False,0.573308527469635,0,1.0
+158,val,100,Medroxyprogesterone acetate,142,Rimonabant,False,0.5824947953224182,0,1.0
+159,val,111,Olanzapine,111,Olanzapine,True,0.2524392902851105,0,1.0
+160,val,124,Pentagastrin,142,Rimonabant,False,0.4288104176521301,0,1.0
+161,val,132,Pyridoxine,36,Ciclopirox,False,0.2845517098903656,0,1.0
+162,val,133,Quinestrol,111,Olanzapine,False,0.2679187059402466,0,1.0
+163,val,134,Radotinib,142,Rimonabant,False,0.8151116371154785,0,1.0
+164,val,135,Raltitrexed,142,Rimonabant,False,0.4368789494037628,0,1.0
+165,val,138,Relugolix,142,Rimonabant,False,0.4042520821094513,0,1.0
+166,val,139,Resveratrol,142,Rimonabant,False,0.651389479637146,0,1.0
+167,val,142,Rimonabant,142,Rimonabant,True,0.8718520402908325,0,1.0
+168,val,143,Ritonavir,142,Rimonabant,False,0.5156356692314148,0,1.0
+169,val,146,Salicylic acid,142,Rimonabant,False,0.40270423889160156,0,1.0
+170,val,147,Saquinavir,111,Olanzapine,False,0.2808493673801422,0,1.0
+171,val,148,Selinexor,142,Rimonabant,False,0.47731485962867737,0,1.0
+172,val,152,Sulfisoxazole,142,Rimonabant,False,0.39478328824043274,0,1.0
+173,val,157,Temsirolimus,142,Rimonabant,False,0.8685306906700134,0,1.0
+174,val,158,Terfenadine,142,Rimonabant,False,0.4101058542728424,0,1.0
+175,val,159,Thymol,142,Rimonabant,False,0.3180101215839386,0,1.0
+176,val,160,Tofacitinib,142,Rimonabant,False,0.5195053219795227,0,1.0
+177,val,161,Tolcapone,142,Rimonabant,False,0.37059181928634644,0,1.0
+178,val,165,Triamcinolone,111,Olanzapine,False,0.26701629161834717,0,1.0
+179,val,166,Triclosan,111,Olanzapine,False,0.2825043499469757,0,1.0
+180,val,167,Trifluridine,111,Olanzapine,False,0.2657274007797241,0,1.0
+181,val,168,Trimetrexate,142,Rimonabant,False,0.3678494095802307,0,1.0
+182,val,170,Tucidinostat,142,Rimonabant,False,0.7379821538925171,0,1.0
+183,val,177,Vilanterol,4,Adenosine,False,0.25931933522224426,0,1.0
+184,val,2,Acetohexamide,2,Acetohexamide,True,0.3244735300540924,0,1.0
+185,val,3,Adenine,93,Larotrectinib,False,0.4563937187194824,0,1.0
+186,val,4,Adenosine,4,Adenosine,True,0.2678874731063843,0,1.0
+187,val,6,Aliskiren,6,Aliskiren,True,0.27149736881256104,0,1.0
+188,val,7,Allantoin,7,Allantoin,True,0.5453588366508484,0,1.0
+189,val,11,Amsacrine,157,Temsirolimus,False,0.3287549316883087,0,1.0
+190,val,17,Artesunate,17,Artesunate,True,0.26557567715644836,0,1.0
+191,val,24,Bimatoprost,158,Terfenadine,False,0.38868364691734314,0,1.0
+192,val,30,Busulfan,157,Temsirolimus,False,0.2607327401638031,0,1.0
+193,val,36,Ciclopirox,36,Ciclopirox,True,0.2863158583641052,0,1.0
+194,val,42,Clotrimazole,42,Clotrimazole,True,0.24202796816825867,0,1.0
+195,val,52,Demeclocycline,52,Demeclocycline,True,0.7544059753417969,0,1.0
+196,val,58,Docetaxel,58,Docetaxel,True,0.45343661308288574,0,1.0
+197,val,74,Folic acid,58,Docetaxel,False,0.3753068149089813,0,1.0
+198,val,77,Furosemide,77,Furosemide,True,0.2057167887687683,0,1.0
+199,val,78,Fusidic acid,78,Fusidic acid,True,0.8785898685455322,0,1.0
+200,val,81,Gemfibrozil,3,Adenine,False,0.4968215227127075,0,1.0
+201,val,85,Hexylresorcinol,85,Hexylresorcinol,True,0.7707028985023499,0,1.0
+202,val,93,Larotrectinib,93,Larotrectinib,True,0.872306764125824,0,1.0
+203,val,94,Lipoic acid,93,Larotrectinib,False,0.2570345401763916,0,1.0
+204,val,100,Medroxyprogesterone acetate,100,Medroxyprogesterone acetate,True,0.3898739814758301,0,1.0
+205,val,111,Olanzapine,111,Olanzapine,True,0.45888155698776245,0,1.0
+206,val,124,Pentagastrin,17,Artesunate,False,0.27773287892341614,0,1.0
+207,val,132,Pyridoxine,132,Pyridoxine,True,0.49842965602874756,0,1.0
+208,val,133,Quinestrol,133,Quinestrol,True,0.924936830997467,0,1.0
+209,val,134,Radotinib,148,Selinexor,False,0.23747971653938293,0,1.0
+210,val,135,Raltitrexed,135,Raltitrexed,True,0.7218033671379089,0,1.0
+211,val,138,Relugolix,170,Tucidinostat,False,0.28010690212249756,0,1.0
+212,val,139,Resveratrol,93,Larotrectinib,False,0.5034173130989075,0,1.0
+213,val,142,Rimonabant,142,Rimonabant,True,0.8091785311698914,0,1.0
+214,val,143,Ritonavir,147,Saquinavir,False,0.6756086349487305,0,1.0
+215,val,146,Salicylic acid,146,Salicylic acid,True,0.42816197872161865,0,1.0
+216,val,148,Selinexor,93,Larotrectinib,False,0.41615283489227295,0,1.0
+217,val,152,Sulfisoxazole,143,Ritonavir,False,0.4746096432209015,0,1.0
+218,val,157,Temsirolimus,157,Temsirolimus,True,0.7576789855957031,0,1.0
+219,val,158,Terfenadine,147,Saquinavir,False,0.4876773953437805,0,1.0
+220,val,159,Thymol,93,Larotrectinib,False,0.48441338539123535,0,1.0
+221,val,160,Tofacitinib,139,Resveratrol,False,0.2533627152442932,0,1.0
+222,val,161,Tolcapone,142,Rimonabant,False,0.4490092098712921,0,1.0
+223,val,165,Triamcinolone,165,Triamcinolone,True,0.5791710019111633,0,1.0
+224,val,166,Triclosan,166,Triclosan,True,0.7260395884513855,0,1.0
+225,val,167,Trifluridine,167,Trifluridine,True,0.2703172564506531,0,1.0
+226,val,168,Trimetrexate,2,Acetohexamide,False,0.2837274372577667,0,1.0
+227,val,170,Tucidinostat,170,Tucidinostat,True,0.24393731355667114,0,1.0
+228,val,177,Vilanterol,177,Vilanterol,True,0.8840955495834351,0,1.0

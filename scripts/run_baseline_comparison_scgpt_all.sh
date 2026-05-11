@@ -4,11 +4,12 @@ set -euo pipefail
 # Baseline ablation sweep.
 #
 # Shared baseline architecture:
-# - all baseline variants use the same 3-branch MLP input of width 3 * d_model
-# - branches are [target, context, kg_context]
-# - missing branches are replaced by learned embeddings of size d_model
+# - all baseline variants use the same 4-branch MLP input of width 4 * d_model
+# - branches are [h0, target, context, kg_context]
+# - h0 is always present; missing optional branches are replaced by learned embeddings of size d_model
 #
 # Variants:
+# - h0_only                = [h0, learned_target, learned_context, learned_kg]
 # - target_only            = [target, learned_context, learned_kg]
 # - context_only           = [learned_target, context, learned_kg]
 # - kg_context             = [learned_target, learned_context, kg]
@@ -33,10 +34,10 @@ DEVICE="${5:-cuda}"
 OUT_ROOT="${6:-results/baseline_comparison}"
 EMBEDDING_SIZE="${7:-64}"
 GAT_DEPTH="${8:-1}"
-KG_HOPS="${9:-1,2,3}"
+KG_HOPS="${9:-3}"
 KG_RELATION_LIMIT="${10:-1,2,4,6,8, all}"
 KG_SOURCE_KEYS_CSV="${11:-dgi, ggd, grace}"
-KG_METHODS_CSV="${12:-path_attn, mean_decay}"
+KG_METHODS_CSV="${12:-path_attn}"
 LOCAL_EMBED_INPUT="${13:-data/scgpt_embeds/tahoe_embeddings_parquet*.npz}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -87,7 +88,7 @@ WEIGHT_SUMMARIES=()
 PATH_WEIGHT_SUMMARIES=()
 PREDICTION_SUMMARIES=()
 PREDICTION_COMPARISONS=()
-NON_KG_VARIANTS=(target_only context_only target_plus_context)
+NON_KG_VARIANTS=(h0_only target_only context_only target_plus_context)
 KG_VARIANTS=(kg_context context_plus_kg target_plus_kg target_plus_context_kg)
 IFS=',' read -r -a RAW_KG_SOURCE_KEYS <<< "$KG_SOURCE_KEYS_CSV"
 IFS=',' read -r -a KG_HOPS_LIST <<< "$KG_HOPS"
@@ -155,10 +156,6 @@ fi
 if [[ ${#KG_SOURCE_KEYS[@]} -eq 0 ]]; then
   echo "No valid KG embedding sources found for: $KG_SOURCE_KEYS_CSV" >&2
   exit 1
-fi
-
-if [[ "${INCLUDE_FULL_MODEL:-0}" == "1" ]]; then
-  KG_VARIANTS+=(full)
 fi
 
 for variant in "${NON_KG_VARIANTS[@]}"; do

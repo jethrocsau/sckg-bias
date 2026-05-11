@@ -18,6 +18,7 @@ from torchinfo import summary
 
 from pipeline.models.baselines import ContextOnlyBaseline
 from pipeline.models.baselines import ContextPlusKGBaseline
+from pipeline.models.baselines import H0OnlyBaseline
 from pipeline.models.baselines import KGContextBaseline
 from pipeline.models.baselines import TargetPlusContextBaseline
 from pipeline.models.baselines import TargetPlusContextKGBaseline
@@ -99,7 +100,7 @@ def parse_args() -> argparse.Namespace:
         "--model-variant",
         type=str,
         default="full",
-        choices=["full", "target_only", "context_only", "kg_context", "target_plus_context", "context_plus_kg", "target_plus_kg", "target_plus_context_kg"],
+        choices=["full", "h0_only", "target_only", "context_only", "kg_context", "target_plus_context", "context_plus_kg", "target_plus_kg", "target_plus_context_kg"],
         help="Which model to train: full graph model or one of the diagnostic baselines.",
     )
     parser.add_argument("--run-training", action="store_true")
@@ -168,6 +169,8 @@ def build_model(device: str, args: argparse.Namespace, stage: int, num_kg_relati
         kg_subtree_pool_method=args.kg_subtree_pool_method,
         kg_relation_pool_method=args.kg_relation_pool_method,
     )
+    if args.model_variant == "h0_only":
+        return H0OnlyBaseline(cfg).to(device)
     if args.model_variant == "target_only":
         return TargetOnlyBaseline(cfg).to(device)
     if args.model_variant == "context_only":
@@ -625,7 +628,7 @@ def _run_single_training(run_name, stage, args, device, relation_limit, out_dir)
 
     relation_ids, relation_names = None, None
     relation_context_for_export = None
-    if stage == 1 or args.model_variant in {"target_only", "context_only", "target_plus_context"}:
+    if stage == 1 or args.model_variant in {"h0_only", "target_only", "context_only", "target_plus_context"}:
         h_kg_multi = None
         num_kg_relations = 1
         d_kg = 256

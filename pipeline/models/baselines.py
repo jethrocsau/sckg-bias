@@ -686,6 +686,11 @@ class ContextOnlyBaseline(_SharedBaselineMLP):
         super().__init__(cfg, use_target=False, use_context=True, use_kg=False)
 
 
+class H0OnlyBaseline(_SharedBaselineMLP):
+    def __init__(self, cfg):
+        super().__init__(cfg, use_target=False, use_context=False, use_kg=False)
+
+
 class KGContextBaseline(_SharedBaselineMLP):
     def __init__(self, cfg):
         super().__init__(cfg, use_target=False, use_context=False, use_kg=True)
