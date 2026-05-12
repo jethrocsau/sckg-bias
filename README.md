@@ -1,17 +1,50 @@
-# scKG-Bias
-
-Closed-set star-graph edge-class prediction for single-cell perturbation data, with optional PrimeKG++ context and interpretability exports.
+# scKG-Bias: Knowledge-Graph Augmentation for 
+# Single-Cell Drug Perturbation Prediction
 
 ## Overview
+scKG-Bias is a model-agnostic post-hoc analysis 
+framework to audit how biomedical knowledge graph 
+(KG) priors bias single-cell drug perturbation 
+predictions. 
 
-This repository implements the training and analysis pipeline used for `scKG-Bias` experiments:
+By casting drug perturbation prediction as a 
+self-supervised masked edge prediction task under 
+a weak-learner bottleneck, the framework learns 
+auditable per-relation KG attention weights without 
+requiring external labels.
 
-- local star-graph construction from embedding shards,
-- optional PrimeKG++ preprocessing from BioMedKG assets,
-- training of full and ablation baselines,
-- export of relation/path attribution summaries.
+Built on scGPT embeddings from the Tahoe-100M atlas 
+and biological priors from PrimeKG++.
 
-The target task is closed-set edge-class prediction over 188 classes.
+## Paper
+Jethro Au, Massachusetts Institute of Technology, 2025
+
+[📄 Read the paper](./paper.pdf)
+
+## Key Contributions
+- Novel weak-learner bottleneck that forces reliance 
+  on KG relations for prediction improvement
+- Leakage-aware neighbour proxy KG signature 
+  construction — target drug masked at both local 
+  graph and KG level simultaneously
+- Auditable per-relation and per-path attention 
+  weights as primary analytical output
+- Model-agnostic design — compatible with any 
+  single-cell encoder or KG embedding method
+- Self-supervised SSL-inspired framework requiring 
+  no external biological labels
+
+## Citation
+If you use this work please cite:
+@misc{au2026sckgbias,
+  author = {Au, Jethro},
+  title  = {scKG-Bias: Exploring Knowledge-Graph 
+            Augmentation for Single-Cell Drug 
+            Perturbation Prediction},
+  year   = {2026},
+  publisher = {GitHub},
+  url    = {https://github.com/jethrocsau/sckg-bias}
+}
 
 ## Final repository entrypoints
 
